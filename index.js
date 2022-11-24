@@ -26,18 +26,24 @@ export const parse = (line, configuration = {}) => {
 	let mergedConfig = {
 		operator: ['=', ':'],
 		separator: ',',
+		strict: false,
 		...configuration,
 	}
 
 	const lexer = moo.states({
 		key: {
+			escape: { match: /\\/, push: 'escape' },
 			operator: { match: createORRegex(mergedConfig.operator), next: 'firstValue' },
 			startQuote: { match: /"/, push: 'inQuote' },
 			startSingleQuote: { match: /'/, push: 'inSingleQuote' },
 			separator: { match: createORRegex(mergedConfig.separator), next: 'key' },
 			keyText: { match: /[^]+?/, lineBreaks: true },
 		},
+		escape: {
+			escapeText: { match: /[^]+?/, lineBreaks: true, pop: 1 },
+		},
 		firstValue: {
+			escape: { match: /\\/, push: 'escape' },
 			startObject: { match: /{/, push: 'inObject' },
 			startArray: { match: /\[/, push: 'inArray' },
 			startQuote: { match: /"/, push: 'inQuote' },
@@ -45,23 +51,28 @@ export const parse = (line, configuration = {}) => {
 			valueText: { match: /[^]+?/, lineBreaks: true, next: 'value' },
 		},
 		value: {
+			escape: { match: /\\/, push: 'escape' },
 			separator: { match: createORRegex(mergedConfig.separator), next: 'key' },
 			valueText: { match: /[^]+?/, lineBreaks: true },
 		},
 		inObject: {
+			escape: { match: /\\/, push: 'escape' },
 			startObject: { match: /{/, push: 'inObject' },
 			endObject: { match: /}/, pop: 1 },
 			objectText: { match: /[^]+?/, lineBreaks: true },
 		},
 		inArray: {
+			escape: { match: /\\/, push: 'escape' },
 			endArray: { match: /\]/, pop: 1 },
 			arrayText: { match: /[^]+?/, lineBreaks: true },
 		},
 		inQuote: {
+			escape: { match: /\\/, push: 'escape' },
 			endQuote: { match: /"/, pop: 1 },
 			quotedText: { match: /[^]+?/, lineBreaks: true },
 		},
 		inSingleQuote: {
+			escape: { match: /\\/, push: 'escape' },
 			endSingleQuote: { match: /'/, pop: 1 },
 			quotedText: { match: /[^]+?/, lineBreaks: true },
 		},
@@ -92,12 +103,19 @@ export const parse = (line, configuration = {}) => {
 			return false
 		}
 		if (!onlyBasics) {
-			if (value.startsWith('{') && value.endsWith('}')) {
-				console.log(value)
-				return json5.parse(value)
-			}
-			if (value.startsWith('[') && value.endsWith(']')) {
-				return json5.parse(value)
+			try {
+				if (value.startsWith('{') && value.endsWith('}')) {
+					return json5.parse(value)
+				}
+				if (value.startsWith('[') && value.endsWith(']')) {
+					return json5.parse(value)
+				}
+			} catch (e) {
+				if (mergedConfig.strict) {
+					throw e
+				}
+				console.warn('Failed to convert to JSON5 object, falling back to string. Error: ', e)
+				return value
 			}
 		}
 		if (value.startsWith("'") && value.endsWith("'")) {
@@ -125,7 +143,7 @@ export const parse = (line, configuration = {}) => {
 				parsedObject._ = []
 			}
 
-			parsedObject._.push(convertValue(currentKey, true))
+			parsedObject._.push(convertValue(currentKey))
 		} else {
 			// TODO: add some ability to JSON parse or sync.
 			parsedObject[currentKey] = convertValue(currentValue)
@@ -161,6 +179,7 @@ export const parse = (line, configuration = {}) => {
 			case 'startSingleQuote':
 			case 'endSingleQuote':
 			case 'quotedText':
+			case 'escapeText':
 				if (hasSeenOperator) {
 					currentValue += token.value
 				} else {
