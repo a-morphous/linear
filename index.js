@@ -1,27 +1,40 @@
 import moo from 'moo'
 import json5 from 'json5'
 
+function isNumeric(str) {
+	if (typeof str != 'string') return false // we only process strings!
+	return (
+		!isNaN(str) && // use type coercion to parse the _entirety_ of the string (`parseFloat` alone does not do this)...
+		!isNaN(parseFloat(str))
+	) // ...and ensure strings of whitespace fail
+}
+
+/**
+ * Creates a regex that matches if any one of the elements in the array is matched
+ * with backslash being an escape
+ * @param {string[] | string} elements
+ */
+function createORRegex(elements) {
+	if (!Array.isArray(elements)) {
+		return new RegExp(`${elements}`)
+	}
+	const regexString = `(?<!\\\\)(?:${elements.join('|')})`
+	return new RegExp(regexString)
+}
+
 export const parse = (line, configuration = {}) => {
 	let mergedConfig = {
-		operator: '=',
+		operator: ['=', ':'],
 		separator: ',',
-		...configuration
-	}
-
-	function isNumeric(str) {
-		if (typeof str != 'string') return false // we only process strings!
-		return (
-			!isNaN(str) && // use type coercion to parse the _entirety_ of the string (`parseFloat` alone does not do this)...
-			!isNaN(parseFloat(str))
-		) // ...and ensure strings of whitespace fail
+		...configuration,
 	}
 
 	const lexer = moo.states({
 		key: {
-			operator: { match: new RegExp(`${mergedConfig.operator}`), next: 'firstValue' },
+			operator: { match: createORRegex(mergedConfig.operator), next: 'firstValue' },
 			startQuote: { match: /"/, push: 'inQuote' },
 			startSingleQuote: { match: /'/, push: 'inSingleQuote' },
-			separator: { match: new RegExp(`${mergedConfig.separator}`), next: 'key' },
+			separator: { match: createORRegex(mergedConfig.separator), next: 'key' },
 			keyText: { match: /[^]+?/, lineBreaks: true },
 		},
 		firstValue: {
@@ -32,7 +45,7 @@ export const parse = (line, configuration = {}) => {
 			valueText: { match: /[^]+?/, lineBreaks: true, next: 'value' },
 		},
 		value: {
-			separator: { match: new RegExp(`${mergedConfig.separator}`), next: 'key' },
+			separator: { match: createORRegex(mergedConfig.separator), next: 'key' },
 			valueText: { match: /[^]+?/, lineBreaks: true },
 		},
 		inObject: {
@@ -86,14 +99,14 @@ export const parse = (line, configuration = {}) => {
 			if (value.startsWith('[') && value.endsWith(']')) {
 				return json5.parse(value)
 			}
-			if (value.startsWith("'") && value.endsWith("'")) {
-				return value.slice(1, value.length - 1)
-			}
-			if (value.startsWith('"') && value.endsWith('"')) {
-				return value.slice(1, value.length - 1)
-			}
 		}
-		
+		if (value.startsWith("'") && value.endsWith("'")) {
+			return value.slice(1, value.length - 1)
+		}
+		if (value.startsWith('"') && value.endsWith('"')) {
+			return value.slice(1, value.length - 1)
+		}
+
 		return value
 	}
 
