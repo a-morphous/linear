@@ -20,4 +20,4 @@ console.log(parse("test:foo, with=different operators", {
 console.log(parse("{this should fail}"))
 
 // escapes
-console.log(parse(`\\"test\\", should retain quotes`))
+console.log(parse(`'"test"', should retain quotes`))

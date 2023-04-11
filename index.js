@@ -18,7 +18,7 @@ function createORRegex(elements) {
 	if (!Array.isArray(elements)) {
 		return new RegExp(`${elements}`)
 	}
-	const regexString = `(?<!\\\\)(?:${elements.join('|')})`
+	const regexString = `(?:${elements.join('|')})`
 	return new RegExp(regexString)
 }
 
