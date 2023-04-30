@@ -1,5 +1,5 @@
 import moo from 'moo'
-import json5 from 'json5'
+import json5 from 'json5/dist/index.mjs'
 
 function isNumeric(str) {
 	if (typeof str != 'string') return false // we only process strings!
